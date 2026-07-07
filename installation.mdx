@@ -1,0 +1,70 @@
+---
+title: "Install aisdk/openai via Composer"
+sidebarTitle: "Installation"
+description: "Install the aisdk/openai package with Composer, configure your OpenAI API key, and verify the integration works with a quick test call."
+---
+
+`aisdk/openai` requires **PHP 8.3 or higher** and is distributed through Composer, the standard PHP dependency manager. Before you begin, make sure you have an [OpenAI API key](https://platform.openai.com/api-keys) — the package will refuse to initialise without one. A PSR-18 compatible HTTP client (such as Guzzle or Symfony HttpClient) and matching PSR-17 factories must also be present in your project so that `aisdk/core` can dispatch requests.
+
+<Steps>
+  <Step title="Require the package">
+    Add `aisdk/openai` to your project using Composer:
+
+    ```bash
+    composer require aisdk/openai
+    ```
+
+    Composer will resolve `aisdk/core ^0.2` and all other dependencies automatically.
+  </Step>
+
+  <Step title="Set your API key">
+    The recommended approach is to export your key as an environment variable so it is never written into source code:
+
+    ```bash
+    OPENAI_API_KEY=sk-...
+    ```
+
+    If you need to configure the provider programmatically — for example, to point at a custom base URL or supply an organisation ID — use `OpenAI::create()`:
+
+    ```php
+    use AiSdk\OpenAI;
+
+    $provider = OpenAI::create([
+        'apiKey'       => 'sk-...',
+        'baseUrl'      => 'https://api.openai.com/v1',
+        'organization' => 'org-...',
+        'headers'      => ['X-Custom-Header' => 'value'],
+    ]);
+    ```
+  </Step>
+
+  <Step title="Verify the integration">
+    Run the following snippet to confirm that the package is installed correctly, your API key is valid, and a round-trip to OpenAI succeeds:
+
+    ```php
+    use AiSdk\Generate;
+    use AiSdk\OpenAI;
+
+    $result = Generate::text('Hello')
+        ->model(OpenAI::model('gpt-4o'))
+        ->run();
+
+    echo $result->text;
+    ```
+
+    If you see a response printed to the console, everything is working.
+  </Step>
+</Steps>
+
+<Note>
+  The `OPENAI_API_KEY` environment variable is the recommended way to supply credentials. Avoid hard-coding keys in source files — use a `.env` file (excluded from version control) or your deployment platform's secrets management.
+</Note>
+
+## Requirements
+
+| Requirement | Constraint |
+|---|---|
+| PHP | `^8.3` |
+| aisdk/core | `^0.2` |
+| PSR-18 HTTP client | e.g. `guzzlehttp/guzzle` or `symfony/http-client` |
+| PSR-17 request & stream factories | e.g. `nyholm/psr7` or `guzzlehttp/psr7` |

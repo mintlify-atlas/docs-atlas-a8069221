@@ -1,0 +1,83 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "PHP AI SDK — OpenAI Provider",
+  "projectDescription": "Official OpenAI provider package for the PHP AI SDK, enabling text generation, streaming, tool calling, structured output, reasoning, and image generation through a unified PHP interface.",
+  "theme": "luma",
+  "primaryColor": "#10A37F",
+  "lightColor": "#D1FAE5",
+  "darkColor": "#065F46",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/overview",
+              "configuration/custom-models"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/text-generation",
+              "guides/streaming",
+              "guides/tool-calling",
+              "guides/structured-output",
+              "guides/reasoning",
+              "guides/image-generation",
+              "guides/multimodal-input",
+              "guides/provider-options"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/openai-facade",
+              "reference/models",
+              "reference/capabilities"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Text generation via OpenAI Chat Completions API",
+    "Server-sent event (SSE) streaming support",
+    "Tool / function calling with automatic argument parsing",
+    "Structured output using JSON Schema (json_schema response format)",
+    "Reasoning effort control for o-series models",
+    "Image generation via gpt-image-1, DALL-E 3, and DALL-E 2",
+    "Multimodal input: text, image, audio, and file content",
+    "Runtime custom model registration without a package release",
+    "Provider-specific raw option escape hatch",
+    "Environment-variable-driven configuration with programmatic override"
+  ],
+  "publicApiSurface": [
+    "OpenAI::create(array $config): OpenAIProvider",
+    "OpenAI::model(string $modelId): TextModelInterface",
+    "OpenAI::image(string $modelId): ImageModelInterface",
+    "OpenAI::registerModel(string|ModelDefinition $model, array $capabilities): void",
+    "OpenAI::default(): OpenAIProvider",
+    "OpenAI::reset(): void",
+    "OpenAIProvider::textModel(string $modelId): TextModelInterface",
+    "OpenAIProvider::imageModel(string $modelId): ImageModelInterface",
+    "OpenAIOptions::fromArray(array $config): OpenAIOptions",
+    "TextModelInterface::generate(TextModelRequest $request): TextModelResponse",
+    "TextModelInterface::stream(TextModelRequest $request): Generator",
+    "ImageModelInterface::generate(ImageRequest $request): ImageResponse",
+    "TextModelInterface::supports(Capability $capability): bool",
+    "TextModelInterface::assume(array $capabilities): static",
+    "TextModelInterface::allowUnknownCapabilities(): static"
+  ]
+}

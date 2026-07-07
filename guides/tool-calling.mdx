@@ -1,0 +1,140 @@
+---
+title: "Tool Calling with OpenAI Models in PHP"
+sidebarTitle: "Tool Calling"
+description: "Define typed PHP tools and let OpenAI models invoke them automatically. Covers tool definition, tool choice, multi-tool requests, and reading tool call results."
+---
+
+Tool calling allows an OpenAI model to request the execution of a PHP function you define. Instead of generating freeform text, the model analyzes the user's prompt, decides which registered tool best satisfies it, and returns a structured JSON payload containing the function name and its arguments. The PHP AI SDK parses that payload into a `ToolCallPart` so your application can act on it — running the function, collecting the result, and optionally continuing the conversation. This pattern is the foundation for agentic workflows, data retrieval, API orchestration, and anything else that requires bridging language models with real-world side effects.
+
+## Defining a Tool
+
+Use `Tool::make()` to create a named, described tool with a typed input schema. Chain `->input()` to declare the parameters and `->run()` to provide the PHP callable that executes when the tool is invoked:
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+use AiSdk\Schema;
+use AiSdk\Tool;
+
+$weather = Tool::make('weather', 'Get current weather')
+    ->input(Schema::string(name: 'city')->required())
+    ->run(fn (string $city): string => "Sunny in {$city}");
+
+$result = Generate::text()
+    ->model(OpenAI::model('gpt-4o'))
+    ->prompt('What is the weather in Lahore?')
+    ->tool($weather)
+    ->run();
+```
+
+The model will recognize from the prompt that the `weather` tool is relevant, emit a tool call for `city = "Lahore"`, and the SDK will invoke the closure and return the result.
+
+## How It Works
+
+<Steps>
+  <Step title="Serialize tools to OpenAI format">
+    `ChatToolConverter::convert()` iterates over the registered tools and maps each one to the OpenAI function-calling schema:
+
+    ```json
+    {
+      "type": "function",
+      "function": {
+        "name": "weather",
+        "description": "Get current weather",
+        "parameters": { "type": "object", "properties": { "city": { "type": "string" } }, "required": ["city"] }
+      }
+    }
+    ```
+  </Step>
+  <Step title="Set tool_choice">
+    `tool_choice` defaults to `"auto"`, meaning the model decides whether to call a tool. You can force or disable tool use — see [Tool Choice](#tool-choice) below.
+  </Step>
+  <Step title="Parse tool call results">
+    When the model responds with one or more tool calls, `ChatResponseParser` decodes the JSON arguments and creates `ToolCallPart` objects — each with an `id`, `name`, and decoded `arguments` array. The `finishReason` is set to `tool_calls`.
+  </Step>
+</Steps>
+
+## Tool Choice
+
+By default, OpenAI decides autonomously whether to invoke a tool (`tool_choice: "auto"`). You can override this behaviour using `ToolChoice`:
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+use AiSdk\Schema;
+use AiSdk\Tool;
+use AiSdk\ToolChoice;
+
+$weather = Tool::make('weather', 'Get current weather')
+    ->input(Schema::string(name: 'city')->required())
+    ->run(fn (string $city): string => "Sunny in {$city}");
+
+$result = Generate::text()
+    ->model(OpenAI::model('gpt-4o'))
+    ->prompt('What is the weather in Lahore?')
+    ->tool($weather)
+    ->toolChoice(ToolChoice::tool('weather'))
+    ->run();
+```
+
+`ToolChoice::tool('weather')` serializes to the OpenAI format `{type: "function", function: {name: "weather"}}`, forcing the model to call that specific function regardless of the prompt.
+
+| `ToolChoice` value | OpenAI wire value | Behaviour |
+|---|---|---|
+| `null` (default) | `"auto"` | Model decides whether to call a tool. |
+| `ToolChoice::tool('name')` | `{type: "function", function: {name: "name"}}` | Forces a specific tool call. |
+
+## Reading Tool Call Results
+
+After `->run()`, inspect `$result->parts` for `ToolCallPart` instances. Each part exposes the call's `id`, `name`, and decoded `arguments`:
+
+```php
+use AiSdk\Responses\Parts\ToolCallPart;
+
+$result = Generate::text()
+    ->model(OpenAI::model('gpt-4o'))
+    ->prompt('What is the weather in Lahore?')
+    ->tool($weather)
+    ->run();
+
+foreach ($result->parts as $part) {
+    if ($part instanceof ToolCallPart) {
+        echo $part->name;              // "weather"
+        echo $part->arguments['city']; // "Lahore"
+        echo $part->id;                // e.g. "call_abc123"
+    }
+}
+```
+
+The `arguments` array is decoded from the JSON string the model returns, so all values are native PHP types ready for use without manual `json_decode` calls.
+
+## Multi-Tool Requests
+
+Pass an array of tools via `->tools()` to let the model choose from multiple functions in a single request:
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+use AiSdk\Schema;
+use AiSdk\Tool;
+
+$weather = Tool::make('weather', 'Get current weather')
+    ->input(Schema::string(name: 'city')->required())
+    ->run(fn (string $city): string => "Sunny in {$city}");
+
+$search = Tool::make('search', 'Search the web for up-to-date information')
+    ->input(Schema::string(name: 'query')->required())
+    ->run(fn (string $query): string => "Results for: {$query}");
+
+$result = Generate::text()
+    ->model(OpenAI::model('gpt-4o'))
+    ->prompt('Search for PHP 8.4 features and check the weather in Lahore.')
+    ->tools([$weather, $search])
+    ->run();
+```
+
+When `tools` is non-empty, `ChatRequestBuilder` always includes both the `tools` array and a `tool_choice` value in the request body. The model may call zero, one, or multiple tools depending on the prompt and `tool_choice` setting.
+
+<Note>
+  Tool calling is supported on `gpt-4o`, `gpt-4.1`, o-series, and `gpt-5` models. Check capability with `$model->supports(Capability::ToolCalling)`.
+</Note>

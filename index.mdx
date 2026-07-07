@@ -1,20 +1,82 @@
 ---
-title: "Introduction"
-description: "Welcome to your project"
+title: "PHP AI SDK — OpenAI Provider"
+sidebarTitle: "Home"
+description: "Official OpenAI provider for the PHP AI SDK. Add text generation, streaming, tool calling, structured output, reasoning, and image generation to your PHP application."
 ---
 
-Write a short description of your product here. What it does, who it's for, and what they can accomplish with it.
+The `aisdk/openai` package is the official OpenAI provider for the PHP AI SDK. It bridges the unified PHP AI SDK interface to OpenAI's Chat Completions and Images APIs, giving your application access to GPT-4o, o-series reasoning models, DALL-E, and gpt-image-1 — all through a clean, type-safe PHP API.
 
-<Tip>
-  Ready to make this your own? Start by editing this page. Update your `docs.json` file to customize your site. Then fill out the [Quickstart](/quickstart) page.
-</Tip>
+<CardGroup cols={2}>
+  <Card title="Installation" icon="box" href="/installation">
+    Install via Composer and configure your API key in under a minute.
+  </Card>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Generate your first AI response with five lines of PHP.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Set API keys, base URLs, organization IDs, and custom headers.
+  </Card>
+  <Card title="API Reference" icon="code" href="/reference/openai-facade">
+    Full reference for the OpenAI facade and provider classes.
+  </Card>
+</CardGroup>
 
-<Card title="Quickstart" icon="rocket" href="/quickstart">
-  This card links to the quickstart page in your project.
-</Card>
-<Card title="Components" icon="puzzle-piece" href="https://mintlify.com/docs/components">
-  Add cards, callouts, steps, tabs, and more to design and structure your pages.
-</Card>
-<Card title="Settings" icon="gear" href="https://mintlify.com/docs/organize/settings">
-  Set your site name, branding, and navigation in the `docs.json` file.
-</Card>
+## What you can build
+
+<CardGroup cols={2}>
+  <Card title="Text Generation" icon="message" href="/guides/text-generation">
+    Chat completions with system prompts, temperature, and token limits.
+  </Card>
+  <Card title="Streaming" icon="wave-pulse" href="/guides/streaming">
+    Server-sent event streaming for real-time token delivery.
+  </Card>
+  <Card title="Tool Calling" icon="wrench" href="/guides/tool-calling">
+    Define tools with typed schemas and let the model invoke them.
+  </Card>
+  <Card title="Structured Output" icon="brackets-curly" href="/guides/structured-output">
+    Force JSON Schema responses for reliable data extraction.
+  </Card>
+  <Card title="Reasoning" icon="brain" href="/guides/reasoning">
+    Control reasoning effort on o-series models like o3 and o4-mini.
+  </Card>
+  <Card title="Image Generation" icon="image" href="/guides/image-generation">
+    Generate images with gpt-image-1, DALL-E 3, and DALL-E 2.
+  </Card>
+  <Card title="Multimodal Input" icon="photo-film" href="/guides/multimodal-input">
+    Pass images, audio, and files alongside text in your prompts.
+  </Card>
+  <Card title="Custom Models" icon="sliders" href="/configuration/custom-models">
+    Register new OpenAI models without waiting for a package release.
+  </Card>
+</CardGroup>
+
+## Quick example
+
+```php quickstart.php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+
+$result = Generate::text()
+    ->model(OpenAI::model('gpt-4o'))
+    ->instructions('Write short, clear answers.')
+    ->prompt('Explain closures in PHP.')
+    ->run();
+
+echo $result->text;
+```
+
+<Steps>
+  <Step title="Install the package">
+    ```bash
+    composer require aisdk/openai
+    ```
+  </Step>
+  <Step title="Set your API key">
+    ```bash
+    export OPENAI_API_KEY=sk-...
+    ```
+  </Step>
+  <Step title="Call the API">
+    Use `OpenAI::model()` or `OpenAI::image()` to pick a model, then chain fluent builder methods and call `->run()`.
+  </Step>
+</Steps>

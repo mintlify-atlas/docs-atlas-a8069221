@@ -1,0 +1,104 @@
+---
+title: "Stream OpenAI Responses in Real Time with PHP"
+sidebarTitle: "Streaming"
+description: "Use server-sent event streaming to receive OpenAI token chunks in real time via the PHP AI SDK, with full usage statistics and finish reason after the stream ends."
+---
+
+Streaming lets your application receive tokens from OpenAI as they are generated rather than waiting for the entire completion to finish. The PHP AI SDK implements SSE (server-sent events) streaming over the `/chat/completions` endpoint: the SDK opens a persistent HTTP connection, reads each `data:` line as it arrives, and yields typed `StreamPart` objects so your code can act on content the moment it appears. This dramatically reduces time-to-first-token for long responses and makes it practical to display output progressively in chat interfaces, CLI tools, or streamed HTTP responses.
+
+## Basic Streaming
+
+Call `->stream()` instead of `->run()` to get a stream handle. Iterate `$stream->chunks()` to receive text fragments, then call `$stream->run()` once the loop finishes to collect the final `TextModelResponse`:
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+
+$stream = Generate::text('Tell me a story.')
+    ->model(OpenAI::model('gpt-4o'))
+    ->stream();
+
+foreach ($stream->chunks() as $chunk) {
+    echo $chunk;
+}
+
+$result = $stream->run();
+```
+
+Each iteration of `$stream->chunks()` yields a plain string fragment — the incremental text content from the model. After the loop, `$result` is a fully populated `TextModelResponse` with usage statistics, finish reason, and provider metadata.
+
+<Tip>
+  Call `$stream->run()` after the loop to get the final `TextModelResponse` with usage statistics and the normalized finish reason.
+</Tip>
+
+## Stream Parts
+
+Internally, `ChatStreamParser::parse()` converts each raw SSE event into a typed `StreamPart` object. The core package defines the following part types, all of which may be yielded during an OpenAI stream:
+
+| Part type | When it is yielded |
+|---|---|
+| `TextDeltaPart` | A new text token fragment is available in `delta.content`. |
+| `ReasoningDeltaPart` | A reasoning token fragment arrives in `delta.reasoning_content` or `delta.reasoning` (o-series only). |
+| `ToolCallStartPart` | The first chunk of a tool call is received — carries `index`, `id`, and `name`. |
+| `ToolCallDeltaPart` | Subsequent argument JSON fragments for an in-progress tool call. |
+| `ProviderMetadataPart` | Response-level metadata (id, model, system_fingerprint, service_tier) or choice-level metadata (finish_reason) extracted from the stream. |
+| `FinishPart` | Emitted once at the very end of the stream — carries the normalized `finishReason` and the final `Usage` object. |
+
+The `chunks()` helper on the stream handle filters these parts and surfaces only the `TextDeltaPart` string values. If you need access to reasoning tokens, tool call fragments, or finish metadata while streaming, consume the raw generator directly through the underlying stream API.
+
+## Accessing Usage After Stream
+
+OpenAI delivers usage statistics in a final SSE chunk. The `ChatRequestBuilder` appends `stream_options: {include_usage: true}` to every streaming request body automatically, so the usage data is always present when the stream ends.
+
+After calling `$stream->run()`, the returned `TextModelResponse` exposes the complete usage breakdown:
+
+```php
+$result = $stream->run();
+
+echo $result->usage->inputTokens;   // Prompt tokens consumed
+echo $result->usage->outputTokens;  // Completion tokens generated
+echo $result->usage->totalTokens;   // Sum of input + output (if reported)
+```
+
+The `FinishPart` at the end of the raw stream carries the same `Usage` object, so it is available regardless of whether you call `->run()` or consume the generator directly.
+
+## Reasoning Streaming
+
+The o-series models (matching the `o*` pattern in `models.json`) perform explicit chain-of-thought reasoning before generating a response. OpenAI surfaces this reasoning incrementally in the SSE stream using two delta fields: `reasoning_content` and `reasoning`. `ChatStreamParser` checks both fields and yields a `ReasoningDeltaPart` whenever either is non-empty:
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+
+$stream = Generate::text('Solve: if x + 5 = 12, what is x?')
+    ->model(OpenAI::model('o3-mini'))
+    ->stream();
+
+foreach ($stream->chunks() as $chunk) {
+    // Only final answer text is yielded here.
+    // Reasoning deltas are available on the raw stream generator.
+    echo $chunk;
+}
+
+$result = $stream->run();
+echo 'Reasoning tokens used: ' . ($result->usage->reasoningTokens ?? 'n/a');
+```
+
+<Note>
+  Reasoning tokens are tracked separately from output tokens. After `$stream->run()`, check `$result->usage->reasoningTokens` for the number of internal reasoning tokens the model consumed. This field is `null` for non-reasoning models such as `gpt-4o`.
+</Note>
+
+## Provider Metadata During Streaming
+
+`ChatStreamParser` emits a `ProviderMetadataPart` as soon as it encounters response-level fields (`id`, `object`, `created`, `model`, `system_fingerprint`, `service_tier`) in the first populated SSE payload. A second `ProviderMetadataPart` is emitted when the `finish_reason` field appears on the choice object.
+
+After `$stream->run()`, these values are consolidated into `$result->providerMetadata['openai']`, giving you the same metadata access pattern as in non-streaming requests:
+
+```php
+$result = $stream->run();
+
+echo $result->providerMetadata['openai']['id'];               // e.g. chatcmpl_openai
+echo $result->providerMetadata['openai']['model'];            // e.g. gpt-4o
+echo $result->providerMetadata['openai']['system_fingerprint'];
+echo $result->finishReason;                                   // stop, length, tool_calls, …
+```

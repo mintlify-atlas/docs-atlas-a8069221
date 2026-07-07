@@ -1,0 +1,106 @@
+---
+title: "Control Reasoning Effort on OpenAI o-Series Models"
+sidebarTitle: "Reasoning"
+description: "Set reasoning effort on OpenAI o-series models like o3 and o4-mini using the PHP AI SDK Reasoning helper — and understand the portable token budget limitation."
+---
+
+OpenAI's o-series models (o1, o3, o4-mini, and others) support a `reasoning_effort` parameter that controls how much compute the model spends on internal chain-of-thought reasoning before producing a response. More effort generally yields higher-quality answers at the cost of latency and tokens. The PHP AI SDK exposes this through the portable `Reasoning::effort()` helper, which maps cleanly onto OpenAI's native `reasoning_effort` field.
+
+## Setting Reasoning Effort
+
+Pass a `Reasoning::effort()` instance to the `->reasoning()` method on your generation request. The SDK writes the value directly to `reasoning_effort` in the Chat Completions request body.
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+use AiSdk\Reasoning;
+
+$result = Generate::text('Solve this step by step: 17 * 23.')
+    ->model(OpenAI::model('o4-mini'))
+    ->reasoning(Reasoning::effort('medium'))
+    ->run();
+
+echo $result->text;
+```
+
+## Effort Levels
+
+OpenAI accepts three named effort levels. Choose based on your latency and quality requirements.
+
+| Level | Description |
+|-------|-------------|
+| `low` | Faster, less thorough — best for simple tasks where speed matters |
+| `medium` | Balanced — a sensible default for most reasoning workloads |
+| `high` | Slower, most thorough — best for complex multi-step problems |
+
+## Token Budget Limitation
+
+<Warning>
+The portable `Reasoning::budget(int $tokens)` form is **not supported** by the OpenAI provider. If you pass a token budget, the SDK throws an `InvalidArgumentException` before making any HTTP request:
+
+```
+OpenAI reasoning does not accept portable token budgets. Use Reasoning::effort(...) or provider raw options.
+```
+
+Use `Reasoning::effort()` instead, or pass OpenAI-specific reasoning controls via `->providerOptions('openai', ['raw' => [...]])`.
+</Warning>
+
+The following code **will throw** an exception:
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+use AiSdk\Reasoning;
+
+// ❌ This throws InvalidArgumentException on the OpenAI provider.
+Generate::text('Think briefly.')
+    ->model(OpenAI::model('o3-mini'))
+    ->reasoning(Reasoning::budget(4096))
+    ->run();
+```
+
+## Accessing Reasoning Tokens
+
+After a successful call, the number of tokens consumed by the model's internal reasoning is available on the usage object. The SDK reads this from `completion_tokens_details.reasoning_tokens` in the API response.
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+use AiSdk\Reasoning;
+
+$result = Generate::text('Prove that √2 is irrational.')
+    ->model(OpenAI::model('o3'))
+    ->reasoning(Reasoning::effort('high'))
+    ->run();
+
+echo $result->text;
+echo "\n\nReasoning tokens used: " . $result->usage->reasoningTokens;
+```
+
+`$result->usage->reasoningTokens` is an integer when the field is present in the API response, or `null` when the model does not report it.
+
+## Compatible Models
+
+The following model patterns registered in the OpenAI provider carry the `reasoning` capability. Any model whose ID matches one of these patterns supports `Reasoning::effort()`.
+
+| Model Pattern | Notes |
+|---------------|-------|
+| `o*` | All o-series models — o1, o3, o4-mini, and future variants |
+| `gpt-5*` | GPT-5 family and all its variants |
+
+You can verify capability support at runtime before sending a request:
+
+```php
+use AiSdk\Capability;
+use AiSdk\OpenAI;
+
+$model = OpenAI::model('o4-mini');
+
+if ($model->supports(Capability::Reasoning)) {
+    // Safe to call ->reasoning(Reasoning::effort('medium'))
+}
+```
+
+<Note>
+Reasoning streaming is supported — `ReasoningDeltaPart` chunks are emitted during a stream and contain the model's internal reasoning text. Use `->stream()` on your generation request to receive them incrementally.
+</Note>

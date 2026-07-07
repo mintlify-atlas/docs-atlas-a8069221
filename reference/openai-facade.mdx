@@ -1,0 +1,293 @@
+---
+title: "OpenAI Facade — PHP AI SDK API Reference"
+sidebarTitle: "OpenAI Facade"
+description: "Complete API reference for the OpenAI facade and OpenAIProvider class — static methods, constructor options, and return types extracted from source."
+---
+
+The `OpenAI` class is a static facade that manages a singleton `OpenAIProvider` instance and exposes factory methods for text and image models. Rather than constructing a provider directly, most application code interacts exclusively with `OpenAI::model()` and `OpenAI::image()`, while `OpenAI::create()` handles one-time provider configuration. The underlying `OpenAIProvider` and `OpenAIOptions` classes are available when you need direct access — for example, when wiring the provider into a dependency injection container or sharing options between multiple provider instances.
+
+---
+
+## `OpenAI` Static Methods
+
+The `OpenAI` facade (namespace `AiSdk`) holds a private static `?OpenAIProvider $default` property and delegates all model construction to it. The `RegistersModels` trait mixed in by the class adds `registerModel()` support.
+
+### `OpenAI::create()`
+
+```php
+public static function create(array $config = []): OpenAIProvider
+```
+
+Creates a new `OpenAIProvider` from the supplied config array, stores it as the singleton, and returns it. Every subsequent call to `OpenAI::model()` or `OpenAI::image()` will use this provider until `OpenAI::reset()` is called.
+
+The `$config` array is forwarded directly to `OpenAIOptions::fromArray()`. All keys are optional — missing keys fall back to environment variables or built-in defaults.
+
+<ParamField body="apiKey" type="string">
+  OpenAI API key. Falls back to the `OPENAI_API_KEY` environment variable. Required — an exception is thrown if neither the argument nor the environment variable is set.
+</ParamField>
+
+<ParamField body="baseUrl" type="string" default="https://api.openai.com/v1">
+  Base URL for all API requests. Falls back to the `OPENAI_BASE_URL` environment variable. Trailing slashes are stripped automatically.
+</ParamField>
+
+<ParamField body="organization" type="string|null" default="null">
+  OpenAI organization ID. When set, it is sent as the `OpenAI-Organization` header on every request. Falls back to the `OPENAI_ORGANIZATION` environment variable.
+</ParamField>
+
+<ParamField body="headers" type="array" default="[]">
+  Additional HTTP headers merged into every request. Keys and values must be strings. These are merged with the `Authorization` header produced from `apiKey`, with your custom headers taking precedence.
+</ParamField>
+
+<ParamField body="sdk" type="Sdk|null" default="null">
+  A pre-configured `AiSdk\Support\Sdk` instance that wraps a PSR-18 HTTP client, PSR-17 request factory, and PSR-17 stream factory. Provide this when you need to supply a custom HTTP stack — for example, during testing with a fake HTTP client.
+</ParamField>
+
+<ResponseField name="return" type="OpenAIProvider">
+  The newly created provider, which is also stored as the facade singleton.
+</ResponseField>
+
+**Example:**
+
+```php
+use AiSdk\OpenAI;
+
+OpenAI::create([
+    'apiKey'       => 'sk-...',
+    'organization' => 'org-...',
+    'headers'      => ['X-Custom-Header' => 'value'],
+]);
+```
+
+---
+
+### `OpenAI::model()`
+
+```php
+public static function model(string $modelId): TextModelInterface
+```
+
+Returns a text model handle for the given model ID using the default provider. If no provider has been configured yet, one is created automatically using environment variables and defaults.
+
+<ParamField body="modelId" type="string" required>
+  The OpenAI model identifier, e.g. `'gpt-4o'`, `'o3'`, `'gpt-4.1-mini'`. Wildcard catalog patterns such as `gpt-4o*` are resolved at capability-check time, not here.
+</ParamField>
+
+<ResponseField name="return" type="TextModelInterface">
+  A `TextModelInterface` instance (concretely `OpenAITextModel`) bound to the given model ID and the current provider options.
+</ResponseField>
+
+```php
+$model = OpenAI::model('gpt-4o');
+$result = Generate::text('Explain closures in PHP.')->model($model)->run();
+```
+
+---
+
+### `OpenAI::image()`
+
+```php
+public static function image(string $modelId): ImageModelInterface
+```
+
+Returns an image model handle for the given model ID using the default provider. Delegates to `OpenAIProvider::imageModel()` internally, which constructs an `OpenAIImageModel`.
+
+<ParamField body="modelId" type="string" required>
+  The OpenAI image model identifier, e.g. `'gpt-image-1'`, `'dall-e-3'`, `'dall-e-2'`.
+</ParamField>
+
+<ResponseField name="return" type="ImageModelInterface">
+  An `ImageModelInterface` instance (concretely `OpenAIImageModel`) bound to the given model ID.
+</ResponseField>
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+
+$result = Generate::image()
+    ->model(OpenAI::image('gpt-image-1'))
+    ->prompt('A clean app icon for a PHP AI SDK')
+    ->size('1024x1024')
+    ->run();
+
+$result->output->save(__DIR__ . '/icon.png');
+```
+
+---
+
+### `OpenAI::default()`
+
+```php
+public static function default(): OpenAIProvider
+```
+
+Returns the current singleton `OpenAIProvider`. If no provider has been registered via `OpenAI::create()`, one is created on demand by calling `self::create()` with an empty config array, which resolves all settings from environment variables.
+
+<ResponseField name="return" type="OpenAIProvider">
+  The active singleton provider.
+</ResponseField>
+
+---
+
+### `OpenAI::reset()`
+
+```php
+public static function reset(): void
+```
+
+Sets the singleton provider back to `null`. The next call to any facade method will trigger lazy re-creation. This method is primarily useful in test suites where each test case needs a clean provider state.
+
+```php
+afterEach(function () {
+    OpenAI::reset();
+});
+```
+
+---
+
+### `OpenAI::registerModel()`
+
+```php
+public static function registerModel(
+    string|ModelDefinition $model,
+    array $capabilities = []
+): void
+```
+
+Registers a custom model definition with the default provider's model registry. Once registered, the model's capability set is used instead of the built-in `models.json` catalog lookup.
+
+<ParamField body="model" type="string|ModelDefinition" required>
+  Either a plain model ID string (used together with `$capabilities`) or a fully constructed `ModelDefinition` object that already encapsulates the capability list.
+</ParamField>
+
+<ParamField body="capabilities" type="array" default="[]">
+  An array of `Capability` enum values. Only used when `$model` is a string. Ignored when a `ModelDefinition` object is passed.
+</ParamField>
+
+**Terse string form:**
+
+```php
+use AiSdk\Capability;
+use AiSdk\OpenAI;
+
+OpenAI::create(['apiKey' => 'sk-test']);
+
+OpenAI::registerModel('gpt-custom', capabilities: [
+    Capability::TextGeneration,
+    Capability::Streaming,
+    Capability::ToolCalling,
+]);
+```
+
+**Full `ModelDefinition` form:**
+
+```php
+use AiSdk\Capability;
+use AiSdk\ModelDefinition;
+use AiSdk\OpenAI;
+
+OpenAI::create(['apiKey' => 'sk-test']);
+
+OpenAI::registerModel(new ModelDefinition(
+    id: 'gpt-custom',
+    capabilities: [
+        Capability::TextGeneration,
+        Capability::Streaming,
+        Capability::TextInput,
+    ],
+));
+```
+
+---
+
+## `OpenAIProvider` Class
+
+`OpenAIProvider` (namespace `AiSdk\OpenAI`) is the concrete provider returned by `OpenAI::create()`. It extends `BaseProvider` and holds an immutable `OpenAIOptions` instance. You can construct it directly when you want to manage provider lifetime yourself rather than relying on the static facade.
+
+### Constructor
+
+```php
+public function __construct(public readonly OpenAIOptions $options)
+```
+
+<ParamField body="options" type="OpenAIOptions" required>
+  A fully constructed `OpenAIOptions` value object. Use `OpenAIOptions::fromArray($config)` to build one from a config array, or construct it directly with named arguments.
+</ParamField>
+
+### Instance Methods
+
+**`textModel(string $modelId): TextModelInterface`**
+
+Creates and returns a new `OpenAITextModel` instance bound to this provider's options and model registry.
+
+**`imageModel(string $modelId): ImageModelInterface`**
+
+Creates and returns a new `OpenAIImageModel` instance bound to this provider's options and model registry.
+
+**`name(): string`**
+
+Returns the string `'openai'` — the canonical provider identifier used in capability source annotations and exception messages.
+
+```php
+use AiSdk\OpenAI\OpenAIOptions;
+use AiSdk\OpenAI\OpenAIProvider;
+
+$provider = new OpenAIProvider(OpenAIOptions::fromArray([
+    'apiKey' => 'sk-...',
+]));
+
+echo $provider->name(); // 'openai'
+
+$textModel  = $provider->textModel('gpt-4o');
+$imageModel = $provider->imageModel('dall-e-3');
+```
+
+---
+
+## `OpenAIOptions` Value Object
+
+`OpenAIOptions` (namespace `AiSdk\OpenAI`) is an immutable value object that carries all connection and authentication settings for the provider. It is constructed either directly or via the `fromArray()` static factory, which also handles environment variable resolution.
+
+### Properties
+
+| Property | Type | Default | Source |
+|---|---|---|---|
+| `apiKey` | `string` | — | `OPENAI_API_KEY` env var or `config['apiKey']` |
+| `baseUrl` | `string` | `https://api.openai.com/v1` | `OPENAI_BASE_URL` env var or `config['baseUrl']` |
+| `organization` | `string\|null` | `null` | `OPENAI_ORGANIZATION` env var or `config['organization']` |
+| `headers` | `array` | `[]` | `config['headers']` (constructor only) |
+| `sdk` | `Sdk\|null` | `null` | `config['sdk']` (constructor only) |
+
+All properties are `readonly`. To change settings, create a new `OpenAIOptions` instance.
+
+### `fromArray(array $config = []): self`
+
+Static factory that resolves each option from the config array, falling back to environment variables where applicable. Trailing slashes are stripped from `baseUrl`. Throws if `apiKey` cannot be resolved from either source.
+
+```php
+use AiSdk\OpenAI\OpenAIOptions;
+
+$options = OpenAIOptions::fromArray([
+    'apiKey'       => 'sk-...',
+    'organization' => 'org-...',
+    'baseUrl'      => 'https://api.openai.com/v1',
+    'headers'      => ['X-Request-Id' => 'abc123'],
+]);
+```
+
+### `authHeaders(): array`
+
+Returns the final merged HTTP headers array that is sent with every API request. The method always includes `Authorization: Bearer {apiKey}` and merges in the custom `headers` array. If `organization` is non-null, `OpenAI-Organization: {organization}` is appended.
+
+```php
+$options = OpenAIOptions::fromArray(['apiKey' => 'sk-abc', 'organization' => 'org-xyz']);
+
+$options->authHeaders();
+// [
+//   'Authorization'      => 'Bearer sk-abc',
+//   'OpenAI-Organization' => 'org-xyz',
+// ]
+```
+
+<Note>
+  Custom headers passed via `config['headers']` are merged after the `Authorization` header is set, so they can override default headers if needed — but they cannot override `Authorization`.
+</Note>

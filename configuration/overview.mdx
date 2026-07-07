@@ -1,0 +1,86 @@
+---
+title: "Configure the OpenAI Provider for PHP AI SDK"
+sidebarTitle: "Overview"
+description: "Configure aisdk/openai using environment variables or programmatic options — set API key, base URL, organization ID, and custom HTTP headers."
+---
+
+The OpenAI provider supports two complementary configuration paths. For most applications the fastest approach is to set environment variables — the provider picks them up automatically and you write zero configuration code. When you need runtime control (different keys per request, proxy URLs, or multiple provider instances), pass an options array directly to `OpenAI::create()`, which returns an `OpenAIProvider` instance and stores it as the package-wide default.
+
+## Environment Variables
+
+Place these variables in your `.env` file or server environment before the SDK is first used. The provider reads them lazily on the first call, so no explicit bootstrap step is required.
+
+| Variable | Description | Default |
+|---|---|---|
+| `OPENAI_API_KEY` | API key used for authentication. | **Required** |
+| `OPENAI_BASE_URL` | Base URL for all API requests. Override to route through a proxy or use Azure OpenAI. | `https://api.openai.com/v1` |
+| `OPENAI_ORGANIZATION` | OpenAI Organization ID sent as the `OpenAI-Organization` request header. | None |
+
+<Warning>
+Never commit API keys to source control. Use environment variables or a secrets manager such as Laravel's encrypted `.env`, AWS Secrets Manager, or HashiCorp Vault.
+</Warning>
+
+## Programmatic Configuration
+
+Call `OpenAI::create()` with an options array to override any environment variable at runtime. The call both creates an `OpenAIProvider` instance and registers it as the default, so subsequent calls to `OpenAI::model()` automatically use it.
+
+```php
+$provider = OpenAI::create([
+    'apiKey'       => 'sk-...',
+    'baseUrl'      => 'https://api.openai.com/v1',
+    'organization' => 'org-...',
+    'headers'      => ['X-Custom-Header' => 'value'],
+]);
+```
+
+<ParamField body="apiKey" type="string" required>
+  Your OpenAI API key. When omitted, falls back to the `OPENAI_API_KEY` environment variable. The value is sent as a `Bearer` token in the `Authorization` header on every request.
+</ParamField>
+
+<ParamField body="baseUrl" type="string" default="https://api.openai.com/v1">
+  Base URL for API requests. Trailing slashes are stripped automatically. Override this value to route traffic through an HTTP proxy, a corporate gateway, or an Azure OpenAI endpoint.
+</ParamField>
+
+<ParamField body="organization" type="string">
+  OpenAI Organization ID. When provided, the value is attached to every request as the `OpenAI-Organization` header, allowing usage to be attributed to the correct organization in your OpenAI dashboard.
+</ParamField>
+
+<ParamField body="headers" type="array">
+  An associative array of additional HTTP headers merged into every outbound request. Useful for tracing, rate-limit routing, or any custom gateway requirements. Example: `['X-Request-Source' => 'my-app']`.
+</ParamField>
+
+## Setting a Default Model
+
+After configuring the provider, you can register a default model with `Generate::model()`. Every subsequent `Generate::text()` call that omits an explicit model will use it, keeping individual calls concise.
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+
+Generate::model(OpenAI::model('gpt-4o'));
+
+$result = Generate::text('Explain closures in PHP.')->run();
+```
+
+## Multiple Providers
+
+`OpenAI::create()` returns an `OpenAIProvider` instance. Store that instance to manage multiple configurations side by side — for example, a production key and a lower-cost key for background tasks.
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+
+$primary = OpenAI::create(['apiKey' => 'sk-primary...']);
+$economy = OpenAI::create(['apiKey' => 'sk-economy...']);
+
+// Use a specific provider instance directly on a request:
+$result = Generate::text('Summarise this article.')
+    ->model($economy->textModel('gpt-4o-mini'))
+    ->run();
+```
+
+Call `OpenAI::reset()` to clear the stored singleton default — useful in test suites between test cases to prevent state leaking between tests.
+
+```php
+OpenAI::reset();
+```

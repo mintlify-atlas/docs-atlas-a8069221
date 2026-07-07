@@ -1,0 +1,95 @@
+---
+title: "Supported OpenAI Models — Capabilities and Limits"
+sidebarTitle: "Models"
+description: "Full list of OpenAI models supported by aisdk/openai, with capability sets, context window sizes, and output token limits extracted from models.json."
+---
+
+The `aisdk/openai` package ships a `resources/models.json` catalog that maps model IDs and ID patterns to their capabilities and limits. This catalog is queried at runtime to validate capability requests before making API calls — if a model handle is asked to perform an operation it does not support, the SDK throws a `CapabilityNotSupportedException` before a single HTTP byte is sent. The catalog is structured around two modalities — `text` for chat-completion models and `image` for generation models — with both exact IDs and wildcard patterns so that newly released variants of a model family are automatically covered.
+
+---
+
+## Text Models
+
+Text models are accessed via `OpenAI::model($modelId)` and drive the `->generate()` and `->stream()` paths through OpenAI's `/chat/completions` endpoint. The table below lists every entry with `"modalities": ["text"]` from `models.json`, including the capabilities declared for each model and its token limits where specified.
+
+| Model / Pattern | Status | Capabilities | Context Tokens | Output Tokens |
+|---|---|---|---|---|
+| `openai/gpt-oss-20b` | stable | `text_generation`, `streaming`, `tool_calling`, `structured_output`, `text_input` | 131 072 | — |
+| `gpt-4o` | stable | `text_generation`, `streaming`, `tool_calling`, `structured_output`, `text_input`, `image_input` | 128 000 | 16 384 |
+| `gpt-4o*` | stable | `text_generation`, `streaming`, `tool_calling`, `structured_output`, `text_input`, `image_input` | — | — |
+| `gpt-4.1*` | stable | `text_generation`, `streaming`, `tool_calling`, `structured_output`, `text_input`, `image_input`, `file_input` | — | — |
+| `gpt-*-audio*` | stable | `text_generation`, `streaming`, `tool_calling`, `structured_output`, `text_input`, `audio_input` | — | — |
+| `o*` | stable | `text_generation`, `streaming`, `tool_calling`, `structured_output`, `reasoning`, `text_input`, `image_input` | — | — |
+| `gpt-5*` | stable | `text_generation`, `streaming`, `tool_calling`, `structured_output`, `reasoning`, `text_input`, `image_input`, `file_input` | — | — |
+
+<Tip>
+  To check whether a specific model ID supports a capability without making an API call, use `OpenAI::model('gpt-4o')->supports(Capability::ImageInput)`.
+</Tip>
+
+---
+
+## Image Models
+
+Image models are accessed via `OpenAI::image($modelId)` and use OpenAI's `/images/generations` endpoint. All three image models in the catalog carry a single capability — `image_generation` — and are `stable`.
+
+| Model | Status | Capabilities |
+|---|---|---|
+| `gpt-image-1` | stable | `image_generation` |
+| `dall-e-3` | stable | `image_generation` |
+| `dall-e-2` | stable | `image_generation` |
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+
+$result = Generate::image()
+    ->model(OpenAI::image('dall-e-3'))
+    ->prompt('A photorealistic mountain landscape at sunrise')
+    ->size('1024x1024')
+    ->run();
+```
+
+<Note>
+  The portable `seed()` option is not supported by OpenAI's image API. Passing `seed()` on an image request will throw an `InvalidArgumentException`. If the specific model or endpoint does support seeding, use `providerOptions('openai', ['raw' => ['seed' => 42]])` as an escape hatch.
+</Note>
+
+---
+
+## Wildcard Matching
+
+Model IDs ending in `*` are glob-style patterns. A pattern like `gpt-4o*` matches any model ID that starts with `gpt-4o` — for example, `gpt-4o-mini`, `gpt-4o-2024-11-20`, and `gpt-4o-search-preview`. Similarly, `o*` matches `o1`, `o3`, `o3-mini`, and future o-series releases.
+
+When the SDK resolves a model ID against the catalog it looks for an **exact match first**, then falls through to the most specific matching wildcard pattern. This means the explicit `gpt-4o` entry (with its precise context and output token limits) takes precedence over the `gpt-4o*` wildcard entry for that exact model ID, while `gpt-4o-mini` is resolved by the wildcard.
+
+<Info>
+  Pattern specificity is determined by the length and position of the literal characters before the `*`. More specific (longer literal prefix) patterns win over shorter ones.
+</Info>
+
+---
+
+## Unknown Models
+
+If a model ID does not match any entry — exact or wildcard — in the catalog, the SDK applies a minimal fallback policy rather than blocking the request outright:
+
+- **`TextGeneration`** is always allowed for unknown text model handles. The `capability()` method returns a `CapabilitySupport` with `source = 'unknown-model-fallback'`, so you can detect this programmatically.
+- All **other capabilities** (`ToolCalling`, `StructuredOutput`, `ImageInput`, etc.) are reported as `NotSupported` and will trigger `CapabilityNotSupportedException` if the SDK tries to use them.
+
+To opt in to additional capabilities on an unknown or preview model, call `->assume()` or `->allowUnknownCapabilities()` on the model handle:
+
+```php
+use AiSdk\Capability;
+use AiSdk\OpenAI;
+
+// Opt in to specific capabilities for a model not yet in the catalog
+$model = OpenAI::model('gpt-4.2-preview')->assume([
+    Capability::ToolCalling,
+    Capability::StructuredOutput,
+]);
+
+// Opt in to all capabilities — useful during early-access / beta
+$model = OpenAI::model('gpt-4.2-preview')->allowUnknownCapabilities();
+```
+
+<Warning>
+  `->allowUnknownCapabilities()` bypasses all catalog checks. The OpenAI API will still return a provider-level error if the model does not actually support the requested feature — but the SDK will not prevent the HTTP call from being made.
+</Warning>

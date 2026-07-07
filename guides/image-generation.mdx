@@ -1,0 +1,150 @@
+---
+title: "Generate Images with OpenAI Models in PHP"
+sidebarTitle: "Image Generation"
+description: "Generate images from gpt-image-1, DALL-E 3, and DALL-E 2 using the PHP AI SDK — set size, aspect ratio, count, and provider-specific options like background transparency."
+---
+
+The `aisdk/openai` package supports image generation through OpenAI's `/images/generations` endpoint. Use `OpenAI::image()` to select a model, then chain the portable builder methods to describe your request. The SDK always requests responses in `b64_json` format and makes the raw bytes available on the result object, so you can save, stream, or process images without handling base64 yourself.
+
+## Basic Example
+
+The following example generates a single 1024×1024 image and saves it to disk:
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+
+$result = Generate::image()
+    ->model(OpenAI::image('gpt-image-1'))
+    ->prompt('A clean app icon for a PHP AI SDK')
+    ->size('1024x1024')
+    ->run();
+
+$result->output->save(__DIR__ . '/icon.png');
+```
+
+## Request Options
+
+<ParamField body="model" type="string" required>
+  The image model to use. Pass an `OpenAI::image(string $modelId)` handle — for example `OpenAI::image('gpt-image-1')`, `OpenAI::image('dall-e-3')`, or `OpenAI::image('dall-e-2')`.
+</ParamField>
+
+<ParamField body="prompt" type="string" required>
+  A text description of the image you want to generate. Detailed, descriptive prompts generally yield better results.
+</ParamField>
+
+<ParamField body="size" type="string">
+  An explicit pixel size string such as `1024x1024`, `1536x1024`, or `1024x1536`. When set, the SDK sends it directly as the `size` field in the API request. Mutually exclusive with `aspectRatio` — if both are set, `size` takes precedence.
+</ParamField>
+
+<ParamField body="aspectRatio" type="string">
+  A portable aspect ratio shorthand. When no explicit `size` is provided the SDK maps the ratio to the closest supported pixel size automatically. Supported mappings:
+
+  | Aspect Ratio | Mapped Size |
+  |---|---|
+  | `1:1` | `1024x1024` |
+  | `3:2` | `1536x1024` |
+  | `16:9` | `1536x1024` |
+  | `2:3` | `1024x1536` |
+  | `9:16` | `1024x1536` |
+
+  Ratios not listed above throw an `InvalidArgumentException`.
+</ParamField>
+
+<ParamField body="count" type="int">
+  The number of images to generate. Maps to the `n` parameter in the OpenAI API. Defaults to `1` when omitted.
+</ParamField>
+
+## Limitations
+
+<Warning>
+**Seed is not supported.** Passing `->seed(int $value)` to an OpenAI image request throws an `InvalidArgumentException` before any HTTP request is made:
+
+```
+OpenAI image generation does not support the portable seed() option.
+Use providerOptions('openai', ...) if this model or endpoint adds provider-specific seed support.
+```
+</Warning>
+
+<Warning>
+**Unsupported aspect ratios throw an exception.** If you call `->aspectRatio('21:9')` (or any ratio not in the table above) without also supplying an explicit `->size()`, the SDK throws an `InvalidArgumentException`:
+
+```
+OpenAI image generation does not support aspect ratio [21:9].
+Use size() or providerOptions('openai', ...).
+```
+</Warning>
+
+## Saving and Using the Output
+
+The `$result->output` object wraps the first returned image. Use `bytes()` to get the raw binary data, or `save()` to write directly to a file path.
+
+```php
+// Get raw image bytes (returns a binary string).
+$bytes = $result->output->bytes();
+
+// Save the image to a file.
+$result->output->save(__DIR__ . '/generated.png');
+```
+
+When you request multiple images via `->count(int $n)`, iterate `$result->images` to access each `ImageData` object individually:
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+
+$result = Generate::image()
+    ->model(OpenAI::image('gpt-image-1'))
+    ->prompt('A red cube on a white background')
+    ->count(3)
+    ->run();
+
+foreach ($result->images as $index => $image) {
+    $image->save(__DIR__ . "/cube_{$index}.png");
+}
+```
+
+## Supported Image Models
+
+All three OpenAI image models are registered in the provider with the `image_generation` capability.
+
+| Model ID | Status | Notes |
+|---|---|---|
+| `gpt-image-1` | Stable | Latest generation model, supports transparency |
+| `dall-e-3` | Stable | High-quality single-image generation |
+| `dall-e-2` | Stable | Faster, supports multiple images per request |
+
+You can verify image generation support on any model handle:
+
+```php
+use AiSdk\Capability;
+use AiSdk\OpenAI;
+
+$model = OpenAI::image('gpt-image-1');
+
+if ($model->supports(Capability::ImageGeneration)) {
+    // Safe to call Generate::image()->model($model)->...->run()
+}
+```
+
+## Provider-Specific Options
+
+Some OpenAI image parameters — such as `background`, `quality`, and `output_format` — have no portable SDK equivalent. Pass them directly as top-level keys inside `->providerOptions('openai', [...])`. The SDK merges your array over the built request body via `array_replace`, so provider options can add new fields or override SDK defaults.
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+
+$result = Generate::image('A red cube')
+    ->model(OpenAI::image('gpt-image-1'))
+    ->count(2)
+    ->size('1024x1024')
+    ->providerOptions('openai', ['background' => 'transparent'])
+    ->run();
+
+$result->output->save(__DIR__ . '/icon.png');
+```
+
+<Note>
+Unlike text generation (which uses a `raw` sub-key), image provider options are merged at the **top level** of the request body. See the [Provider Options](/guides/provider-options) guide for a full comparison.
+</Note>

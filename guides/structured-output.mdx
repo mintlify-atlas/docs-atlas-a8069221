@@ -1,0 +1,160 @@
+---
+title: "Structured Output with JSON Schema in PHP"
+sidebarTitle: "Structured Output"
+description: "Extract structured data from OpenAI models using the json_schema response format in PHP AI SDK — define schemas with Schema::object() and access typed PHP arrays."
+---
+
+Structured output instructs an OpenAI model to respond exclusively with valid JSON that conforms to a schema you define. Instead of parsing freeform prose, your application receives a predictable, machine-readable payload every time — making it ideal for data extraction, classification, slot-filling, form parsing, and any workflow where downstream code must consume the model's output programmatically. The PHP AI SDK translates `Schema` objects into the OpenAI `json_schema` response format and delivers the raw JSON string in `$result->text`, ready for `json_decode`.
+
+## Basic Example
+
+Chain `->output()` onto `Generate::text()` and pass a `Schema::object()` describing the fields you want:
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+use AiSdk\Schema;
+
+$result = Generate::text()
+    ->model(OpenAI::model('gpt-4o'))
+    ->prompt('Extract the city and country from: Lahore, Pakistan.')
+    ->output(Schema::object(
+        name: 'address',
+        properties: [
+            Schema::string(name: 'city')->required(),
+            Schema::string(name: 'country')->required(),
+        ],
+    ))
+    ->run();
+
+echo $result->text;
+// {"city":"Lahore","country":"Pakistan"}
+```
+
+The model is constrained by the schema and cannot return any other structure. No prompt engineering is required to enforce the format — the constraint is applied at the API level.
+
+## How It Works
+
+When an `Output` with `kind = KIND_OBJECT` and a `Schema` instance is present, `ChatRequestBuilder::responseFormat()` builds the following request body fragment:
+
+```json
+{
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "name": "address",
+      "strict": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "city": { "type": "string" },
+          "country": { "type": "string" }
+        },
+        "required": ["city", "country"]
+      }
+    }
+  }
+}
+```
+
+The `strict: true` flag is always set by the SDK. This activates OpenAI's constrained decoding mode — the model is guaranteed to produce output that validates against the schema, and any field not declared in `properties` is rejected before the response is returned.
+
+<Info>
+  OpenAI's `strict` mode requires that all object properties have explicit types and that no additional properties are allowed. The SDK sets `strict: true` automatically whenever a `Schema` instance is used.
+</Info>
+
+## Schema Building
+
+The `aisdk/core` package provides a fluent schema builder. The most common patterns for structured output are:
+
+**String field (required):**
+
+```php
+Schema::string(name: 'city')->required()
+```
+
+**Object with named properties:**
+
+```php
+Schema::object(
+    name: 'address',
+    properties: [
+        Schema::string(name: 'city')->required(),
+        Schema::string(name: 'country')->required(),
+    ],
+)
+```
+
+**Nested objects:**
+
+```php
+Schema::object(
+    name: 'person',
+    properties: [
+        Schema::string(name: 'name')->required(),
+        Schema::object(
+            name: 'address',
+            properties: [
+                Schema::string(name: 'city')->required(),
+                Schema::string(name: 'country')->required(),
+            ],
+        )->required(),
+    ],
+)
+```
+
+<Note>
+  Additional schema types — integers, booleans, enums, arrays, and union types — are available from the `aisdk/core` package. Refer to the core package documentation for the full `Schema` API.
+</Note>
+
+## JSON Object Mode
+
+If you need the model to return arbitrary JSON without enforcing a specific schema, pass `Output::KIND_OBJECT` without a `Schema` instance. The SDK sets `response_format: {type: "json_object"}` in this case:
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+use AiSdk\Outputs\Output;
+
+$result = Generate::text()
+    ->model(OpenAI::model('gpt-4o'))
+    ->prompt('Return a JSON object with the keys "status" and "message".')
+    ->output(Output::object())
+    ->run();
+
+$data = json_decode($result->text, true);
+echo $data['status'];
+```
+
+<Warning>
+  JSON object mode does not enforce a schema. The model may omit fields or include unexpected keys. Use `Schema::object()` with `strict: true` whenever downstream code depends on specific fields being present.
+</Warning>
+
+## Accessing the Response
+
+The structured JSON is available as a plain string in `$result->text`. Decode it with `json_decode` to work with the data as a PHP array:
+
+```php
+$result = Generate::text()
+    ->model(OpenAI::model('gpt-4o'))
+    ->prompt('Extract the city and country from: Lahore, Pakistan.')
+    ->output(Schema::object(
+        name: 'address',
+        properties: [
+            Schema::string(name: 'city')->required(),
+            Schema::string(name: 'country')->required(),
+        ],
+    ))
+    ->run();
+
+$address = json_decode($result->text, true);
+
+echo $address['city'];    // Lahore
+echo $address['country']; // Pakistan
+```
+
+All other `TextModelResponse` fields — `usage`, `finishReason`, and `providerMetadata['openai']` — are populated exactly as they are for plain text generation requests.
+
+<Tip>
+  Use `Schema::object()` with `strict: true` for reliable data extraction. The model is constrained to the schema and cannot return unexpected fields.
+</Tip>

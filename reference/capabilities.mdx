@@ -1,0 +1,140 @@
+---
+title: "Capability Enum Reference for aisdk/openai"
+sidebarTitle: "Capabilities"
+description: "Reference for all Capability enum values used in aisdk/openai — what each capability enables, which models support it, and how to check or assume capabilities at runtime."
+---
+
+The `Capability` enum (from `aisdk/core`) defines the feature set a model exposes. The `aisdk/openai` package declares capabilities per model in `resources/models.json` and enforces them before making API calls. When a request requires a capability that the target model does not declare — for example, sending an image URL to `gpt-4o-mini` without the `image_input` capability — the SDK throws `CapabilityNotSupportedException` before any HTTP request is made. This early enforcement catches configuration mistakes at the application layer rather than relying on opaque provider API errors.
+
+---
+
+## Capability Table
+
+Each row describes one `Capability` enum case, the feature it gates, and the OpenAI model families that declare it in `models.json`.
+
+| Capability | Description | Example Models |
+|---|---|---|
+| `TextGeneration` | Core chat completions capability. Required for any text output from a text model. | All text models |
+| `Streaming` | Server-sent event streaming via `->stream()` through `/chat/completions`. | `gpt-4o`, `gpt-4o*`, `gpt-4.1*`, `o*`, `gpt-5*` |
+| `ToolCalling` | Function / tool calling with structured JSON arguments passed back from the model. | `gpt-4o`, `gpt-4.1*`, `gpt-*-audio*`, `o*`, `gpt-5*` |
+| `StructuredOutput` | `json_schema` response format for strict, schema-validated JSON output. | `gpt-4o`, `gpt-4.1*`, `gpt-*-audio*`, `o*`, `gpt-5*` |
+| `Reasoning` | `reasoning_effort` parameter for extended o-series chain-of-thought thinking. | `o*`, `gpt-5*` |
+| `TextInput` | Plain text content in messages. | All text models |
+| `ImageInput` | Image URL or data URI embedded in message content. | `gpt-4o`, `gpt-4o*`, `gpt-4.1*`, `o*`, `gpt-5*` |
+| `AudioInput` | Base64-encoded audio content embedded in message input. | `gpt-*-audio*` |
+| `FileInput` | Base64 or URL file attachments in messages. | `gpt-4.1*`, `gpt-5*` |
+| `ImageGeneration` | Image generation via `/images/generations`. | `gpt-image-1`, `dall-e-3`, `dall-e-2` |
+
+---
+
+## Runtime Capability Checking
+
+Every model handle returned by `OpenAI::model()` or `OpenAI::image()` implements the `supports()` and `capability()` methods. `supports()` returns a plain boolean for simple guard checks; `capability()` returns a richer `CapabilitySupport` object that includes the support state and its source, which is useful for debugging or logging.
+
+```php
+use AiSdk\Capability;
+use AiSdk\OpenAI;
+
+// Check a single capability — returns bool
+$model = OpenAI::model('gpt-4o');
+$model->supports(Capability::ImageInput); // true
+$model->supports(Capability::FileInput);  // false
+
+// Get detailed support info
+$support = $model->capability(Capability::ToolCalling);
+// $support->state  — CapabilitySupportState::Supported | CapabilitySupportState::NotSupported
+// $support->source — 'catalog', 'user-assumed', 'unknown-model-fallback',
+//                    'user-allowed-unknown-capabilities', etc.
+```
+
+The `source` string tells you *why* a capability is supported or not:
+
+| Source | Meaning |
+|---|---|
+| `'catalog'` | Resolved from the built-in `models.json` catalog entry. |
+| `'user-assumed'` | Explicitly opted in via `->assume([...])` on this model handle. |
+| `'unknown-model-fallback'` | Model not in catalog; `TextGeneration` is always allowed as a fallback. |
+| `'user-allowed-unknown-capabilities'` | All capabilities allowed because `->allowUnknownCapabilities()` was called. |
+
+---
+
+## Assuming Capabilities
+
+When a model is not present in the catalog — for example a preview or custom fine-tuned model — or when you need a capability that the catalog does not yet list for a known model, you can opt in at the model handle level without modifying any package files.
+
+### `->assume(array $capabilities): static`
+
+Opts in to a specific set of capabilities for this handle only. `TextGeneration` is still allowed by the unknown-model fallback and does not need to be listed explicitly, though including it is harmless.
+
+```php
+use AiSdk\Capability;
+use AiSdk\OpenAI;
+
+// Opt in to specific capabilities for an unknown model
+$model = OpenAI::model('gpt-new-preview')->assume([
+    Capability::ToolCalling,
+    Capability::StructuredOutput,
+]);
+
+$model->supports(Capability::TextGeneration);  // true  (unknown-model-fallback)
+$model->supports(Capability::ToolCalling);     // true  (user-assumed)
+$model->supports(Capability::StructuredOutput); // true  (user-assumed)
+$model->supports(Capability::ImageInput);      // false
+
+$model->capability(Capability::ToolCalling)->source; // 'user-assumed'
+```
+
+### `->allowUnknownCapabilities(): static`
+
+Bypasses all capability checks for this handle. Every `supports()` call returns `true` and the source is recorded as `'user-allowed-unknown-capabilities'`. Use this during early-access periods when a model's full capability set is not yet known.
+
+```php
+use AiSdk\Capability;
+use AiSdk\OpenAI;
+
+// Bypass all capability checks
+$model = OpenAI::model('gpt-new-preview')->allowUnknownCapabilities();
+
+$model->supports(Capability::ToolCalling);     // true
+$model->supports(Capability::StructuredOutput); // true
+$model->supports(Capability::ImageInput);      // true
+
+$model->capability(Capability::ImageInput)->source; // 'user-allowed-unknown-capabilities'
+```
+
+<Note>
+  Capability checks prevent silent failures — the SDK throws `CapabilityNotSupportedException` before making the HTTP request if the model does not support a required capability. Neither `->assume()` nor `->allowUnknownCapabilities()` changes what the provider API accepts; they only tell the SDK to skip its pre-flight enforcement. A rejected request will still produce a normalized SDK exception from the provider response.
+</Note>
+
+---
+
+## Registering Custom Models
+
+For models you use repeatedly across requests, prefer `OpenAI::registerModel()` over per-handle `->assume()`. A registered model is stored in the provider's model registry and applies to every handle created for that model ID — no per-call configuration needed.
+
+```php
+use AiSdk\Capability;
+use AiSdk\ModelDefinition;
+use AiSdk\OpenAI;
+
+// Register using a ModelDefinition object
+OpenAI::create(['apiKey' => 'sk-test']);
+
+OpenAI::registerModel(new ModelDefinition(
+    id: 'gpt-custom',
+    capabilities: [
+        Capability::TextGeneration,
+        Capability::Streaming,
+        Capability::ToolCalling,
+        Capability::StructuredOutput,
+        Capability::TextInput,
+    ],
+));
+
+// Every subsequent OpenAI::model('gpt-custom') call uses these capabilities
+$model = OpenAI::model('gpt-custom');
+$model->supports(Capability::ToolCalling);     // true
+$model->supports(Capability::ImageInput);      // false
+```
+
+See the [OpenAI Facade reference](/reference/openai-facade#openai-registermodel) for full `registerModel()` parameter documentation.

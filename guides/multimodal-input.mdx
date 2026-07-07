@@ -1,0 +1,180 @@
+---
+title: "Multimodal Input: Images, Audio, and Files in PHP"
+sidebarTitle: "Multimodal Input"
+description: "Send images, audio clips, and file attachments alongside text messages to OpenAI models using the PHP AI SDK Content helpers and Message builder."
+---
+
+The `aisdk/openai` package supports multimodal inputs — text, images (URL or base64 data URI), audio clips (base64-encoded), and file attachments — by mapping PHP `Content` objects into the OpenAI Chat Completions `messages` array format. Each content type is converted transparently by `ChatMessageConverter`, so you work with the portable SDK API and the provider handles the wire format.
+
+## Image Input
+
+Attach one or more images to a user message by mixing `Content::text()` and `Content::image()` inside `Message::user([...])`. The SDK converts each image to the OpenAI `image_url` content part format.
+
+```php
+use AiSdk\Content;
+use AiSdk\Generate;
+use AiSdk\Message;
+use AiSdk\OpenAI;
+
+$result = Generate::text()
+    ->messages([
+        Message::user([
+            Content::text('What is this?'),
+            Content::image('https://example.com/photo.png'),
+        ]),
+    ])
+    ->model(OpenAI::model('gpt-4o'))
+    ->run();
+
+echo $result->text;
+```
+
+The image is sent to the API as:
+
+```json
+{
+  "type": "image_url",
+  "image_url": { "url": "https://example.com/photo.png" }
+}
+```
+
+Images can be provided as either a remote URL or a base64 data URI. When you pass a base64-encoded image, the SDK constructs the `data:<mime>;base64,<data>` URI and places it in the `url` field — OpenAI accepts both formats interchangeably.
+
+**Compatible models** (from `models.json`): `gpt-4o`, `gpt-4o*`, `gpt-4.1*`, `o*`, `gpt-5*`.
+
+## Audio Input
+
+Send audio content alongside a text prompt using `Content::audio()`. The SDK converts the clip to OpenAI's `input_audio` content part, selecting the correct format name from the MIME type automatically.
+
+```php
+use AiSdk\Content;
+use AiSdk\Generate;
+use AiSdk\Message;
+use AiSdk\OpenAI;
+
+$audioBase64 = base64_encode(file_get_contents('/path/to/clip.mp3'));
+
+$result = Generate::text()
+    ->messages([
+        Message::user([
+            Content::text('Transcribe and summarise this recording.'),
+            Content::audio($audioBase64, mimeType: 'audio/mpeg'),
+        ]),
+    ])
+    ->model(OpenAI::model('gpt-4o-audio-preview'))
+    ->run();
+
+echo $result->text;
+```
+
+### Supported Audio Formats
+
+The SDK maps MIME types to the format names OpenAI expects in the `input_audio.format` field:
+
+| MIME Type | OpenAI Format |
+|---|---|
+| `audio/mpeg` | `mp3` |
+| `audio/mp3` | `mp3` |
+| `audio/wav` | `wav` |
+| `audio/x-wav` | `wav` |
+| `audio/ogg` | `ogg` |
+| *(any other)* | `wav` (default fallback) |
+
+**Compatible models**: patterns matching `gpt-*-audio*` (e.g. `gpt-4o-audio-preview`).
+
+## File Input
+
+Attach PDF documents or other files to a message using `Content::file()`. The SDK converts the attachment to OpenAI's `file` content part with a `file_data` field containing the base64 data URI.
+
+```php
+use AiSdk\Content;
+use AiSdk\Generate;
+use AiSdk\InputEncoding;
+use AiSdk\Message;
+use AiSdk\OpenAI;
+
+$result = Generate::text()
+    ->messages([
+        Message::user([
+            Content::text('Summarise the key findings in this report.'),
+            Content::file(
+                'JVBERi0=',
+                mimeType: 'application/pdf',
+                filename: 'report.pdf',
+                encoding: InputEncoding::Base64,
+            ),
+        ]),
+    ])
+    ->model(OpenAI::model('gpt-4.1'))
+    ->run();
+
+echo $result->text;
+```
+
+The file is sent to the API as:
+
+```json
+{
+  "type": "file",
+  "file": {
+    "filename": "report.pdf",
+    "file_data": "data:application/pdf;base64,JVBERi0="
+  }
+}
+```
+
+**Compatible models**: `gpt-4.1*`, `gpt-5*`.
+
+<Warning>
+Passing file input to a model that does not have the `FileInput` capability — for example `gpt-4o` — throws a `CapabilityNotSupportedException` **before** making any HTTP request. Always verify capability support or use a compatible model.
+</Warning>
+
+## Capability Checking
+
+Before sending a multimodal message, you can interrogate the model handle to confirm it supports the content types you intend to send. This avoids an unnecessary round-trip when the capability is absent.
+
+```php
+use AiSdk\Capability;
+use AiSdk\OpenAI;
+
+$model = OpenAI::model('gpt-4.1');
+
+if ($model->supports(Capability::ImageInput)) {
+    // Safe to attach Content::image(...)
+}
+
+if ($model->supports(Capability::AudioInput)) {
+    // Safe to attach Content::audio(...)
+}
+
+if ($model->supports(Capability::FileInput)) {
+    // Safe to attach Content::file(...)
+}
+```
+
+## Combining Multiple Content Types
+
+Multiple content types can coexist in the same user message. Here is an example that combines descriptive text with an image URL in a single turn:
+
+```php
+use AiSdk\Content;
+use AiSdk\Generate;
+use AiSdk\Message;
+use AiSdk\OpenAI;
+
+$result = Generate::text()
+    ->messages([
+        Message::user([
+            Content::text('Describe what you see in this diagram and explain it simply.'),
+            Content::image('https://example.com/architecture-diagram.png'),
+        ]),
+    ])
+    ->model(OpenAI::model('gpt-4o'))
+    ->run();
+
+echo $result->text;
+```
+
+<Tip>
+Use `Message::user([...])` with an array of `Content` objects whenever you need mixed content in one turn. For a plain text-only message you can pass a string directly: `Message::user('Hello')`.
+</Tip>

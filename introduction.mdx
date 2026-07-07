@@ -1,0 +1,60 @@
+---
+title: "aisdk/openai: Official OpenAI Provider for PHP AI SDK"
+sidebarTitle: "Introduction"
+description: "aisdk/openai is the official OpenAI provider for the PHP AI SDK, covering text generation, streaming, tool calling, structured output, reasoning, and image generation."
+---
+
+`aisdk/openai` is the official OpenAI provider for the PHP AI SDK. It plugs directly into `aisdk/core` and gives your PHP application a clean, strongly-typed interface to OpenAI's full model surface — from everyday chat completions with `gpt-4o` to reasoning models in the `o*` family, audio-capable models, and image generation via `gpt-image-1` and DALL·E. Rather than handling raw HTTP yourself, you call the high-level `Generate` facade from `aisdk/core`, point it at an `OpenAI::model()` or `OpenAI::image()` handle, and the provider takes care of authentication, request serialisation, streaming, and response normalisation.
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="box-archive" href="/installation">
+    Install the package with Composer and configure your OpenAI API key.
+  </Card>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Generate text, stream tokens, and create images in under five minutes.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Customise the base URL, organisation header, and per-request options.
+  </Card>
+  <Card title="Guides" icon="book-open" href="/guides/tool-calling">
+    Deep-dives into tool calling, structured output, reasoning, and more.
+  </Card>
+</CardGroup>
+
+## Supported Capabilities
+
+Every capability listed below is handled natively by the provider — no additional adapters or workarounds are required.
+
+| Capability | Support |
+|---|---|
+| Text generation | Native |
+| Streaming | Native |
+| Tool calling | Native |
+| Structured output | Native (`json_schema`) |
+| Reasoning | Native (`reasoning_effort`) |
+| Image generation | Native |
+| Text input | Native |
+| Image input | Native |
+| Audio input | Native |
+| File input | Native |
+
+## Supported Models
+
+The table below reflects the model registry shipped with the package (`resources/models.json`). Wildcard patterns (e.g. `gpt-4o*`) match all versioned aliases of a base model family. You can also register new model IDs at runtime without waiting for a package release — see the [Custom Model Registration](/configuration/custom-models) guide.
+
+| Model ID / Pattern | Status | Modalities | Key Capabilities |
+|---|---|---|---|
+| `openai/gpt-oss-20b` | Stable | Text | Text generation, Streaming, Tool calling, Structured output |
+| `gpt-4o` | Stable | Text | Text generation, Streaming, Tool calling, Structured output, Image input |
+| `gpt-4o*` | Stable | Text | Text generation, Streaming, Tool calling, Structured output, Image input |
+| `gpt-4.1*` | Stable | Text | Text generation, Streaming, Tool calling, Structured output, Image input, File input |
+| `gpt-*-audio*` | Stable | Text | Text generation, Streaming, Tool calling, Structured output, Audio input |
+| `o*` | Stable | Text | Text generation, Streaming, Tool calling, Structured output, Reasoning, Image input |
+| `gpt-5*` | Stable | Text | Text generation, Streaming, Tool calling, Structured output, Reasoning, Image input, File input |
+| `gpt-image-1` | Stable | Image | Image generation |
+| `dall-e-3` | Stable | Image | Image generation |
+| `dall-e-2` | Stable | Image | Image generation |
+
+<Note>
+  `aisdk/openai` requires **`aisdk/core ^0.2`** and **PHP 8.3+**. Make sure both constraints are satisfied before installing.
+</Note>

@@ -1,0 +1,97 @@
+---
+title: "Provider-Specific Raw Options for OpenAI in PHP"
+sidebarTitle: "Provider Options"
+description: "Pass raw OpenAI API parameters as provider options in aisdk/openai — use the escape hatch for seed, service_tier, background, and other non-portable options."
+---
+
+The PHP AI SDK is designed to be portable across providers, which means not every OpenAI-specific API parameter has a dedicated first-class method. The `->providerOptions('openai', [...])` escape hatch lets you pass arbitrary raw parameters directly into the request body. It is the right tool when you need a feature that is OpenAI-specific or has not yet been promoted to the portable SDK API surface.
+
+## Text Generation Raw Options
+
+For Chat Completions requests, place your raw parameters under a `raw` key inside the provider options array. The SDK merges them last via `array_replace`, so they can add new fields or override any value the SDK has already set.
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+
+$result = Generate::text('Hello')
+    ->model(OpenAI::model('gpt-4o'))
+    ->providerOptions('openai', [
+        'raw' => ['seed' => 42, 'service_tier' => 'default'],
+    ])
+    ->run();
+
+echo $result->text;
+```
+
+The `raw` array is merged into the final Chat Completions body after all SDK-managed fields have been set. This means raw options take highest precedence — use them carefully when overriding SDK defaults such as `temperature` or `stream`.
+
+## Image Generation Provider Options
+
+For image generation requests, provider options are merged at the **top level** of the request body — no `raw` nesting is needed. The entire options array is passed through `array_replace` directly over the built request.
+
+```php
+use AiSdk\Generate;
+use AiSdk\OpenAI;
+
+$result = Generate::image('A red cube')
+    ->model(OpenAI::image('gpt-image-1'))
+    ->count(2)
+    ->size('1024x1024')
+    ->providerOptions('openai', ['background' => 'transparent'])
+    ->run();
+
+$result->output->save(__DIR__ . '/icon.png');
+```
+
+Here `background: transparent` is merged directly alongside `model`, `prompt`, `n`, `size`, and `response_format` in the JSON body sent to `/images/generations`.
+
+## How Merging Works
+
+The merge strategy differs between text and image generation. The key difference is the `raw` wrapper required for text requests.
+
+<Tabs>
+  <Tab title="Text Generation">
+    Raw parameters must be nested under the `raw` key. They are merged last into the Chat Completions body:
+
+    ```php
+    ->providerOptions('openai', [
+        'raw' => [
+            'seed'         => 42,
+            'service_tier' => 'default',
+            'logprobs'     => true,
+        ],
+    ])
+    ```
+
+    Internally, `ChatRequestBuilder::build()` extracts `$options['raw']` and calls `array_replace($body, $raw)`.
+  </Tab>
+  <Tab title="Image Generation">
+    Parameters are passed as top-level keys — no `raw` wrapper. They are merged directly over the built request body:
+
+    ```php
+    ->providerOptions('openai', [
+        'background'     => 'transparent',
+        'output_format'  => 'webp',
+        'quality'        => 'high',
+    ])
+    ```
+
+    Internally, `ImageRequestBuilder::build()` calls `array_replace($body, $request->providerOptionsFor('openai'))`.
+  </Tab>
+</Tabs>
+
+## Use Cases
+
+Common scenarios where provider options are the right approach:
+
+- **`seed`** — Fix a seed value for reproducible text completions (not supported as a portable option).
+- **`service_tier`** — Select throughput tier (`default`, `flex`) for capacity routing.
+- **`background`** — Request transparent image backgrounds from `gpt-image-1` (`transparent` or `opaque`).
+- **`logprobs`** — Enable per-token log probability output for analysis or calibration.
+- **`output_format`** — Request a specific image format from the image endpoint (`png`, `webp`, `jpeg`).
+- **`quality`** — Control image generation quality (`low`, `medium`, `high`, `auto`).
+
+<Note>
+Raw options bypass SDK validation. If the model or API version does not support a parameter, OpenAI will return an API error which the SDK surfaces as an exception.
+</Note>

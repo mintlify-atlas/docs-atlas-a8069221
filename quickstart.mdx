@@ -1,47 +1,110 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Started with aisdk/openai in 5 Minutes"
+sidebarTitle: "Quickstart"
+description: "Generate your first AI text response, stream tokens, call a tool, and generate an image — all in under five minutes using aisdk/openai."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+This guide walks you from a blank project to a working OpenAI integration in five minutes. You will install the package, configure authentication, generate your first text response, stream tokens as they arrive, and produce an image — all using the clean, fluent API provided by `aisdk/core` and `aisdk/openai`.
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Install the package">
+    Require `aisdk/openai` via Composer. It will pull in `aisdk/core ^0.2` and any other dependencies automatically:
 
     ```bash
-    npm install your-package
+    composer require aisdk/openai
     ```
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+
+  <Step title="Set your API key">
+    Export your OpenAI API key as an environment variable before running any scripts:
 
     ```bash
-    your-cli init
+    export OPENAI_API_KEY=sk-...
+    ```
+
+    The provider reads `OPENAI_API_KEY` automatically. You can also pass it programmatically via `OpenAI::create(['apiKey' => 'sk-...'])` if you prefer explicit configuration.
+  </Step>
+
+  <Step title="Generate text">
+    Call `Generate::text()`, attach a model handle, add instructions and a prompt, then call `run()`. The response is synchronous and the generated content is available on `$result->text`:
+
+    ```php
+    use AiSdk\Generate;
+    use AiSdk\OpenAI;
+
+    $result = Generate::text()
+        ->model(OpenAI::model('gpt-4o'))
+        ->instructions('Write short, clear answers.')
+        ->prompt('Explain closures in PHP.')
+        ->run();
+
+    echo $result->text;
+    ```
+
+    If you want to set a default model once and omit the `->model()` call on every request, use the `Generate::model()` shorthand:
+
+    ```php
+    use AiSdk\Generate;
+    use AiSdk\OpenAI;
+
+    Generate::model(OpenAI::model('gpt-4o'));
+
+    $result = Generate::text('Explain closures in PHP.')->run();
+
+    echo $result->text;
     ```
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
 
-    ```bash
-    your-cli start
+  <Step title="Stream tokens">
+    Call `->stream()` instead of `->run()` to receive a stream object. Iterate over `$stream->chunks()` to print each token as it arrives, then call `->run()` on the same stream to obtain the fully assembled result:
+
+    ```php
+    use AiSdk\Generate;
+    use AiSdk\OpenAI;
+
+    $stream = Generate::text('Tell me a story.')
+        ->model(OpenAI::model('gpt-4o'))
+        ->stream();
+
+    foreach ($stream->chunks() as $chunk) {
+        echo $chunk;
+    }
+
+    $result = $stream->run();
+    ```
+  </Step>
+
+  <Step title="Generate an image">
+    Switch to the `Generate::image()` builder and pass an `OpenAI::image()` handle. Specify your prompt and desired dimensions, then call `->run()`. Save the result directly to disk with `$result->output->save()`:
+
+    ```php
+    use AiSdk\Generate;
+    use AiSdk\OpenAI;
+
+    $result = Generate::image()
+        ->model(OpenAI::image('gpt-image-1'))
+        ->prompt('A clean app icon for a PHP AI SDK')
+        ->size('1024x1024')
+        ->run();
+
+    $result->output->save(__DIR__.'/icon.png');
     ```
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Next Steps
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>
+<CardGroup cols={2}>
+  <Card title="Tool Calling" icon="wrench" href="/guides/tool-calling">
+    Bind PHP callables to tools and let the model invoke them automatically.
+  </Card>
+  <Card title="Structured Output" icon="brackets-curly" href="/guides/structured-output">
+    Use `json_schema` mode to receive typed, validated objects from the model.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Customise base URLs, organisation headers, and per-request provider options.
+  </Card>
+  <Card title="Streaming" icon="water" href="/guides/streaming">
+    Build real-time UIs by processing tokens as they stream from the API.
+  </Card>
+</CardGroup>
