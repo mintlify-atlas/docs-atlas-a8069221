@@ -1,7 +1,7 @@
 ---
-title: "Generate Images with OpenAI Models in PHP"
+title: "Generate Images Using OpenAI Models in the PHP AI SDK"
 sidebarTitle: "Image Generation"
-description: "Generate images from gpt-image-1, DALL-E 3, and DALL-E 2 using the PHP AI SDK — set size, aspect ratio, count, and provider-specific options like background transparency."
+description: "Use aisdk/openai to generate images from gpt-image-1, DALL-E 3, and DALL-E 2. Set size, aspect ratio, count, and provider-specific options like background."
 ---
 
 The `aisdk/openai` package supports image generation through OpenAI's `/images/generations` endpoint. Use `OpenAI::image()` to select a model, then chain the portable builder methods to describe your request. The SDK always requests responses in `b64_json` format and makes the raw bytes available on the result object, so you can save, stream, or process images without handling base64 yourself.
@@ -61,8 +61,7 @@ $result->output->save(__DIR__ . '/icon.png');
 **Seed is not supported.** Passing `->seed(int $value)` to an OpenAI image request throws an `InvalidArgumentException` before any HTTP request is made:
 
 ```
-OpenAI image generation does not support the portable seed() option.
-Use providerOptions('openai', ...) if this model or endpoint adds provider-specific seed support.
+OpenAI image generation does not support the portable seed() option. Use providerOptions('openai', ...) if this model or endpoint adds provider-specific seed support.
 ```
 </Warning>
 
@@ -70,8 +69,7 @@ Use providerOptions('openai', ...) if this model or endpoint adds provider-speci
 **Unsupported aspect ratios throw an exception.** If you call `->aspectRatio('21:9')` (or any ratio not in the table above) without also supplying an explicit `->size()`, the SDK throws an `InvalidArgumentException`:
 
 ```
-OpenAI image generation does not support aspect ratio [21:9].
-Use size() or providerOptions('openai', ...).
+OpenAI image generation does not support aspect ratio [21:9]. Use size() or providerOptions('openai', ...).
 ```
 </Warning>
 

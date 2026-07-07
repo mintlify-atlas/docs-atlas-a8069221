@@ -1,7 +1,7 @@
 ---
-title: "Capability Enum Reference for aisdk/openai"
+title: "aisdk/openai Capability Enum Reference and Runtime Guide"
 sidebarTitle: "Capabilities"
-description: "Reference for all Capability enum values used in aisdk/openai — what each capability enables, which models support it, and how to check or assume capabilities at runtime."
+description: "All Capability enum values for aisdk/openai — what each enables, which model families support it, and how to assume or check capabilities at runtime."
 ---
 
 The `Capability` enum (from `aisdk/core`) defines the feature set a model exposes. The `aisdk/openai` package declares capabilities per model in `resources/models.json` and enforces them before making API calls. When a request requires a capability that the target model does not declare — for example, sending an image URL to `gpt-4o-mini` without the `image_input` capability — the SDK throws `CapabilityNotSupportedException` before any HTTP request is made. This early enforcement catches configuration mistakes at the application layer rather than relying on opaque provider API errors.

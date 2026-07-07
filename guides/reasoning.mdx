@@ -1,7 +1,7 @@
 ---
 title: "Control Reasoning Effort on OpenAI o-Series Models"
 sidebarTitle: "Reasoning"
-description: "Set reasoning effort on OpenAI o-series models like o3 and o4-mini using the PHP AI SDK Reasoning helper — and understand the portable token budget limitation."
+description: "Set reasoning effort on OpenAI o-series and gpt-5 models using the PHP AI SDK Reasoning helper, and learn about the portable token budget limitation."
 ---
 
 OpenAI's o-series models (o1, o3, o4-mini, and others) support a `reasoning_effort` parameter that controls how much compute the model spends on internal chain-of-thought reasoning before producing a response. More effort generally yields higher-quality answers at the cost of latency and tokens. The PHP AI SDK exposes this through the portable `Reasoning::effort()` helper, which maps cleanly onto OpenAI's native `reasoning_effort` field.

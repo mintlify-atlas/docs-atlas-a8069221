@@ -1,7 +1,7 @@
 ---
-title: "Text Generation with OpenAI in PHP"
+title: "Generating Text with OpenAI Models via the PHP AI SDK"
 sidebarTitle: "Text Generation"
-description: "Generate AI text responses from OpenAI GPT models using the PHP AI SDK — configure prompts, system instructions, temperature, token limits, and multi-turn conversations."
+description: "Generate text with OpenAI GPT models in PHP — configure prompts, system instructions, temperature, token limits, and multi-turn conversations."
 ---
 
 The `aisdk/openai` package routes every text generation request through OpenAI's `/chat/completions` endpoint. The SDK converts your high-level `Generate::text()` builder call into a properly authenticated HTTP request, parses the response into a normalized `TextModelResponse`, and exposes typed fields for text content, token usage, finish reason, and raw provider metadata — all without you touching a single curl handle.
@@ -67,6 +67,14 @@ $result = Generate::text('Explain closures in PHP.')->run();
   The complete generated text. This is the concatenation of all `TextPart` content in the response.
 </ResponseField>
 
+<ResponseField name="parts" type="array">
+  The typed parts that make up the response. For text generation this contains `TextPart` instances; when the model issues tool calls it contains `ToolCallPart` instances instead (or in addition). Inspect this array when you need per-part detail rather than the concatenated `text` string.
+</ResponseField>
+
+<ResponseField name="rawResponse" type="array">
+  The complete, unmodified JSON payload returned by the OpenAI API. Use this as an escape hatch when you need fields that the SDK does not surface through normalized accessors.
+</ResponseField>
+
 <ResponseField name="usage" type="object">
   Token consumption for the request.
 
@@ -107,6 +115,12 @@ $result = Generate::text('Explain closures in PHP.')->run();
     <ResponseField name="id" type="string">
       The completion ID — for example `chatcmpl_openai`. Stable across retries for the same logical request.
     </ResponseField>
+    <ResponseField name="object" type="string">
+      The object type returned by the API — always `chat.completion` for non-streaming requests.
+    </ResponseField>
+    <ResponseField name="created" type="int">
+      Unix timestamp of when the completion was created.
+    </ResponseField>
     <ResponseField name="model" type="string">
       The model that actually served the request — may differ from the requested ID when using dated aliases.
     </ResponseField>
@@ -115,6 +129,9 @@ $result = Generate::text('Explain closures in PHP.')->run();
     </ResponseField>
     <ResponseField name="service_tier" type="string">
       The service tier used — for example `default` or `flex`.
+    </ResponseField>
+    <ResponseField name="choice_index" type="int">
+      The zero-based index of the choice in the `choices` array. Always `0` when using the default single-choice configuration.
     </ResponseField>
     <ResponseField name="choice_finish_reason" type="string">
       The raw `finish_reason` string from the choice object, before SDK normalization.

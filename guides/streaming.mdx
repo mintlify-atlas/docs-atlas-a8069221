@@ -1,7 +1,7 @@
 ---
-title: "Stream OpenAI Responses in Real Time with PHP"
+title: "Streaming OpenAI Responses in Real Time with PHP AI SDK"
 sidebarTitle: "Streaming"
-description: "Use server-sent event streaming to receive OpenAI token chunks in real time via the PHP AI SDK, with full usage statistics and finish reason after the stream ends."
+description: "Stream OpenAI tokens in real time with the PHP AI SDK — iterate chunks(), access usage and finish reason from FinishPart, and handle reasoning deltas."
 ---
 
 Streaming lets your application receive tokens from OpenAI as they are generated rather than waiting for the entire completion to finish. The PHP AI SDK implements SSE (server-sent events) streaming over the `/chat/completions` endpoint: the SDK opens a persistent HTTP connection, reads each `data:` line as it arrives, and yields typed `StreamPart` objects so your code can act on content the moment it appears. This dramatically reduces time-to-first-token for long responses and makes it practical to display output progressively in chat interfaces, CLI tools, or streamed HTTP responses.

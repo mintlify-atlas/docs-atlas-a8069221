@@ -45,7 +45,7 @@ $provider = OpenAI::create([
   OpenAI Organization ID. When provided, the value is attached to every request as the `OpenAI-Organization` header, allowing usage to be attributed to the correct organization in your OpenAI dashboard.
 </ParamField>
 
-<ParamField body="headers" type="array">
+<ParamField body="headers" type="array<string, string>">
   An associative array of additional HTTP headers merged into every outbound request. Useful for tracing, rate-limit routing, or any custom gateway requirements. Example: `['X-Request-Source' => 'my-app']`.
 </ParamField>
 

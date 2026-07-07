@@ -1,7 +1,7 @@
 ---
-title: "Tool Calling with OpenAI Models in PHP"
+title: "OpenAI Tool Calling in PHP: Define and Invoke Model Tools"
 sidebarTitle: "Tool Calling"
-description: "Define typed PHP tools and let OpenAI models invoke them automatically. Covers tool definition, tool choice, multi-tool requests, and reading tool call results."
+description: "Define typed PHP tools for OpenAI — configure tool_choice, handle multi-tool requests, and read ToolCallPart id, name, and arguments."
 ---
 
 Tool calling allows an OpenAI model to request the execution of a PHP function you define. Instead of generating freeform text, the model analyzes the user's prompt, decides which registered tool best satisfies it, and returns a structured JSON payload containing the function name and its arguments. The PHP AI SDK parses that payload into a `ToolCallPart` so your application can act on it — running the function, collecting the result, and optionally continuing the conversation. This pattern is the foundation for agentic workflows, data retrieval, API orchestration, and anything else that requires bridging language models with real-world side effects.

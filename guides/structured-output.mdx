@@ -1,7 +1,7 @@
 ---
-title: "Structured Output with JSON Schema in PHP"
+title: "Extracting Structured JSON Output from OpenAI in PHP AI SDK"
 sidebarTitle: "Structured Output"
-description: "Extract structured data from OpenAI models using the json_schema response format in PHP AI SDK — define schemas with Schema::object() and access typed PHP arrays."
+description: "Use json_schema to get structured data from OpenAI — define schemas with Schema::object() and decode results from $result->text."
 ---
 
 Structured output instructs an OpenAI model to respond exclusively with valid JSON that conforms to a schema you define. Instead of parsing freeform prose, your application receives a predictable, machine-readable payload every time — making it ideal for data extraction, classification, slot-filling, form parsing, and any workflow where downstream code must consume the model's output programmatically. The PHP AI SDK translates `Schema` objects into the OpenAI `json_schema` response format and delivers the raw JSON string in `$result->text`, ready for `json_decode`.
@@ -127,7 +127,7 @@ echo $data['status'];
 ```
 
 <Warning>
-  JSON object mode does not enforce a schema. The model may omit fields or include unexpected keys. Use `Schema::object()` with `strict: true` whenever downstream code depends on specific fields being present.
+  JSON object mode does not enforce a schema. The model may omit fields or include unexpected keys. Use `Schema::object()` whenever downstream code depends on specific fields being present — the SDK will automatically apply `strict` mode.
 </Warning>
 
 ## Accessing the Response
@@ -156,5 +156,5 @@ echo $address['country']; // Pakistan
 All other `TextModelResponse` fields — `usage`, `finishReason`, and `providerMetadata['openai']` — are populated exactly as they are for plain text generation requests.
 
 <Tip>
-  Use `Schema::object()` with `strict: true` for reliable data extraction. The model is constrained to the schema and cannot return unexpected fields.
+  Use `Schema::object()` for reliable data extraction. The SDK automatically sets `strict: true` in the request, so the model is constrained to the schema and cannot return unexpected fields.
 </Tip>

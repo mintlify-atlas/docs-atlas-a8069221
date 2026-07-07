@@ -1,7 +1,7 @@
 ---
-title: "OpenAI Facade — PHP AI SDK API Reference"
+title: "OpenAI Facade and Provider — PHP AI SDK API Reference"
 sidebarTitle: "OpenAI Facade"
-description: "Complete API reference for the OpenAI facade and OpenAIProvider class — static methods, constructor options, and return types extracted from source."
+description: "Complete API reference for the OpenAI facade and OpenAIProvider class — static methods, constructor options, and return types verified against source."
 ---
 
 The `OpenAI` class is a static facade that manages a singleton `OpenAIProvider` instance and exposes factory methods for text and image models. Rather than constructing a provider directly, most application code interacts exclusively with `OpenAI::model()` and `OpenAI::image()`, while `OpenAI::create()` handles one-time provider configuration. The underlying `OpenAIProvider` and `OpenAIOptions` classes are available when you need direct access — for example, when wiring the provider into a dependency injection container or sharing options between multiple provider instances.
@@ -289,5 +289,5 @@ $options->authHeaders();
 ```
 
 <Note>
-  Custom headers passed via `config['headers']` are merged after the `Authorization` header is set, so they can override default headers if needed — but they cannot override `Authorization`.
+  Custom headers passed via `config['headers']` are merged after the `Authorization` header using `array_merge`, so they take precedence over all default headers — including `Authorization`. Do not include an `Authorization` key in `headers` unless you intend to replace the default bearer token.
 </Note>

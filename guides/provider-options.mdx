@@ -1,7 +1,7 @@
 ---
-title: "Provider-Specific Raw Options for OpenAI in PHP"
+title: "OpenAI Provider-Specific Request Options in the PHP AI SDK"
 sidebarTitle: "Provider Options"
-description: "Pass raw OpenAI API parameters as provider options in aisdk/openai — use the escape hatch for seed, service_tier, background, and other non-portable options."
+description: "Pass raw OpenAI parameters via providerOptions() in aisdk/openai — the escape hatch for seed, service_tier, background, and other non-portable fields."
 ---
 
 The PHP AI SDK is designed to be portable across providers, which means not every OpenAI-specific API parameter has a dedicated first-class method. The `->providerOptions('openai', [...])` escape hatch lets you pass arbitrary raw parameters directly into the request body. It is the right tool when you need a feature that is OpenAI-specific or has not yet been promoted to the portable SDK API surface.
